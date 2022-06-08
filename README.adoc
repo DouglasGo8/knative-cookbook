@@ -130,3 +130,7 @@ oc -n knative-serving get cm config-autoscaler -o yaml
 
 . #_The time period in which the requests are monitored for calls and metrics; defaults to 60 seconds_#
 . #_The time period within which the inactive pods are terminated; defaults to 30 seconds_#
+. When another request targets an inactive Revision, the activator intercepts that request and will instruct the Knative autoscaler to create new pods for that service Revision.
+. Handle Requests Spikes
+. Avoid Coldstart Latency with minScale and maxScale
+. By default does not set an upper limit to the number of pods (maxScale fix this)

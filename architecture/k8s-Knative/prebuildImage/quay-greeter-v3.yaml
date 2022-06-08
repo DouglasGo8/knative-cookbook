@@ -1,0 +1,34 @@
+apiVersion: serving.knative.dev/v1alpha1
+kind: Service
+metadata:
+  name: greeter
+spec:
+  template:
+    metadata:
+      name: greeter-v1
+      annotations:
+        # Target 10 in-flight-requests per pod.
+        autoscaling.knative.dev/target: "10"
+        # the minimum number of pods to scale down to
+        autoscaling.knative.dev/minScale: "2"
+        # the maximum number of pods to scale up to
+        autoscaling.knative.dev/maxScale: "5"
+  release:
+    # [current, candidate]
+    # 20% to green revision
+    revisions: [ 'greeter-v1', 'greeter-v2' ]
+    rolloutPercent: 20
+    configuration:
+      revisionTemplate:
+        spec:
+          container:
+            image: quay.io/rhdevelopers/knative-tutorial-greeter:quarkus
+            env:
+              - name: MESSAGE_PREFIX
+                value: Namaste
+            livenessProbe:
+              httpGet:
+                path: /healthz
+            readinessProbe:
+              httpGet:
+                path: /healthz
