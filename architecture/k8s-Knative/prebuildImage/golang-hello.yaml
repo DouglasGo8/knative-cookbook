@@ -1,0 +1,14 @@
+apiVersion: serving.knative.dev/v1alpha1
+kind: Service
+metadata:
+  name: hello-v1
+spec:
+  runLatest:
+    configuration:
+      revisionTemplate:
+        spec:
+          container:
+            image: gcr.io/knative-samples/helloworld-go
+            env:
+              - name: TARGET # The environment variable printed out by the sample app
+                value: "Go Sample v1"

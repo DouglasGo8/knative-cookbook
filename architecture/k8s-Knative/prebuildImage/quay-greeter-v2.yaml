@@ -1,0 +1,24 @@
+apiVersion: serving.knative.dev/v1alpha1
+kind: Service
+metadata:
+  name: greeter
+spec:
+  release:
+    # [current, candidate]
+    # 20% to green revision
+    revisions: [ 'greeter-v1', 'greeter-v2' ]
+    rolloutPercent: 20
+    configuration:
+      revisionTemplate:
+        spec:
+          container:
+            image: quay.io/rhdevelopers/knative-tutorial-greeter:quarkus
+            env:
+              - name: MESSAGE_PREFIX
+                value: Namaste
+            livenessProbe:
+              httpGet:
+                path: /healthz
+            readinessProbe:
+              httpGet:
+                path: /healthz

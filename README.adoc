@@ -1,0 +1,132 @@
+= Knative CookBook
+
+== Links
+
+. https://knative.dev/docs/[Knative]
+. https://github.com/redhat-developer-demos/knative-tutorial/tree/knative-cookbook[GitHub Repo]
+. https://github.com/redhat-developer-demos/knative-minishift[Knative on Minishift v1]
+. https://developers.redhat.com/blog/2019/04/09/from-zero-to-quarkus-and-knative-the-easy-way#prerequisites[Knative on Minishift v2]
+. https://192.168.42.25:8443/console[Local OKD]
+. https://github.com/openshift-cloud-functions/minishift-addons[Minishift addons]
+. https://medium.com/google-cloud/knative-serving-0-7-96e6d7be463e[Knative Serving 0.7]
+. https://codelabs.developers.google.com/codelabs/knative-intro#8[Serving multiple versions simultaneously]
+
+== Knative major concepts
+
+. Knative is a Kubernetes-based platform that helps to run your serverless work‐loads in the BaaS way
+. Knative was started with the simple goal of having a Kubernetes-native platform to build, deploy, and manage your serverless workloads
+. On Knative you can deploy any modern application workload, such as monolithic applications, microservices, or even tiny functions
+. Like any other Kubernetes resource, a Knative Serving Service can be deployed using a resource YAML file.
+As you will see, the resource YAML is similar to a Kubernetes Deployment but with a few attributes removed.
+
+== Enable Knative on Minishift
+
+[source,bash]
+----
+# memory for the vm
+minishift config set memory 8GB
+
+# the vCpus for the vm
+minishift config set cpus 4
+
+# extra disk size for the vm
+minishift config set disk-size 50g
+
+# caching the images that will be downloaded during app deployments
+minishift config set image-caching true
+
+# Add new user called admin with password with role cluster-admin
+minishift addons enable admin-user
+
+# Allow the containers to be run with uid 0
+minishift addons enable anyuid
+
+# Start minishift
+minishift start
+
+eval $(minishift docker-env) && eval $(minishift oc-env)
+
+#
+oc login -u admin -p admin
+oc login -u developer -p welcome1
+----
+
+== Enable SCCs (Security Context Constraints)
+
+[source,bash]
+----
+oc project myproject
+# Set privileged and anyuid scc to default SA in myproject
+oc adm policy add-scc-to-user privileged -z default -n myproject
+oc adm policy add-scc-to-user anyuid -z default -n myproject
+----
+
+== Deploy Knative commands
+
+. API K8s used to deploy Knative on Minishift is *_serving.knative.dev/v1alpha1_*
+
+[source,bash]
+----
+# same command to kubectl, the deploy take a slight more time that normal deploy
+watch oc get pods
+oc -n myproject get ksvc greeter
+oc get configurations greeter
+----
+
+== Invoking the current
+
+[source,bash]
+----
+#!/bin/bash
+KSVC_NAME=${1:-'greeter'}
+IP_ADDRESS="$(minikube ip):$(kubectl get svc istio-ingressgateway \
+--namespace istio-system \
+--output 'jsonpath={.spec.ports[?(@.port==80)].nodePort}')"
+curl -H "Host:$KSVC_NAME.chapter-2.example.com" $IP_ADDRESS
+oc ip
+watch -n 5 http greeter-00000-service-myproject.192.168.42.30.nip.io/
+----
+
+.Knative Service Invoked by Router from OKD
+image::architecture/thumb/Knative-serving_Exposed_as_OKD_Router.png[]
+
+== _Knative Serving Interaction_
+
+****
+You should notice that if your ksvc pod called greeter is not inter‐ acted with (i.e., not called/invoked), it will terminate as Knative Serving will automatically #_scale-to-zero_# any Knative Service pods that are not being actively used.
+If needed, $BOOK_HOME/bin/call.sh will wake up greeter, causing it to scale back up to an actively run‐ ning pod.
+You can use watch kubectl get pods to monitor the pod lifecycle
+****
+
+[source,bash]
+----
+oc get revisions
+----
+
+== Knative Autoscaling features
+
+. Scale out, means increase up your instances based on inbound HTTP traffic
+. Knative Horizontal Pod Autoscaler (KPA)
+. Horizontal Pod Autoscaler (HPA); the default autoscaler built into Kubernetes, HPA relies on three important metrics: concurrency, requests per second, and cpu
+
+.Config-map file to configure Knative Service for Autoscaling
+[source,yaml]
+----
+apiVersion: v1
+data:
+  container-concurrency-target-default: "100"
+  enable-scale-to-zero: "true"
+  stable-window: "60s"
+  scale-to-zero-grace-period: "30s"
+----
+
+. This config-map exists on knative-serving ns, to check
+
+[source,bash]
+----
+# kubectl or oc
+oc -n knative-serving get cm config-autoscaler -o yaml
+----
+
+. #_The time period in which the requests are monitored for calls and metrics; defaults to 60 seconds_#
+. #_The time period within which the inactive pods are terminated; defaults to 30 seconds_#
