@@ -10,6 +10,15 @@
 . https://github.com/openshift-cloud-functions/minishift-addons[Minishift addons]
 . https://medium.com/google-cloud/knative-serving-0-7-96e6d7be463e[Knative Serving 0.7]
 . https://codelabs.developers.google.com/codelabs/knative-intro#8[Serving multiple versions simultaneously]
+. https://knative.dev/docs/install/client/install-kn/
+. https://knative.dev/docs/eventing/custom-event-source/containersource/#create-a-containersource-object
+. https://github.com/hguerrero/amq-examples/tree/master/kafka-demo/src/main/java/com/redhat/kafkademo
+. https://developers.redhat.com/blog/2018/10/29/how-to-run-kafka-on-openshift-the-enterprise-kubernetes-with-amq-streams#test_using_an_external_application
+. https://redhat-developer-demos.github.io/knative-tutorial/knative-tutorial/setup/minikube.html[Red Install Knative Minikube]
+. https://github.com/kubernetes/minikube/releases[Minikube Releases]
+. https://piotrminkowski.com/2021/03/12/knative-eventing-with-kafka-and-spring-cloud/[Knative On Spring Cloud]
+. https://knative.dev/docs/eventing/sources/kafka-source/[Knative Kafka Source]
+. https://knative.dev/docs/eventing/configuration/kafka-channel-configuration/#create-a-kafka-channel-configmap[Knative Kafka Channel]
 
 == Knative major concepts
 
@@ -57,8 +66,8 @@ oc login -u developer -p welcome1
 ----
 oc project myproject
 # Set privileged and anyuid scc to default SA in myproject
-oc adm policy add-scc-to-user privileged -z default -n myproject
 oc adm policy add-scc-to-user anyuid -z default -n myproject
+oc adm policy add-scc-to-user privileged -z default -n myproject
 ----
 
 == Deploy Knative commands
@@ -134,3 +143,77 @@ oc -n knative-serving get cm config-autoscaler -o yaml
 . Handle Requests Spikes
 . Avoid Coldstart Latency with minScale and maxScale
 . By default does not set an upper limit to the number of pods (maxScale fix this)
+
+== Knative Serving
+
+. Knative has two major subprojects: Serving and Eventing, with Serving you have dynamic autoscaling, including scaling down to zero pods, based on the absence of HTTP traffic load, and Eventing, you now have that same autoscaling capability but bridged into other protocols or from other sour‐ ces beyond HTTP
+
+=== Usage Patterns
+
+Source to Sink
+
+ 1.Source to Sink provides the simplest getting started experience with Knative
+ 2.Eventing. It provides single Sink—that is, event receiving service
+
+Channels and Subscriptions
+
+ With Channels and Subscriptions, the Knative Eventing system defines a Channel, which can connect to various backends, each Channel can have one or more Subscribers in the form of Sink Services
+
+Brokers and Triggers
+
+ Brokers and Triggers are similar to Channels and Subscriptions, except that they support filtering of events event filtering is a method that allows the Subscribers to show an interest in a certain set of messages that flows into the Broker
+
+
+=== Minikube Knative Configuration
+
+
+[source,bash]
+----
+minikube config set cpus 4
+minikube config set memory 8192
+
+minikube start
+
+minikube addons enable registry
+kubectl get pods -n kube-system
+
+
+# After Knative Installations
+kubectl api-resources --api-group=kafka.strimzi.io
+kubectl label nodes kind-control-plane my-label=sample
+kubectl get events --sort-by='.lastTimestamp' -n knative-serving
+kubectl config set-context --current --namespace=knative-cookbook
+
+
+minikube stop && minikube delete --all && minikube delete --purge
+----
+
+=== All Knative Eventing resources will be under the one of following API groups:
+
+- messaging.knative.dev
+- eventing.knative.dev
+- sources.knative.dev
+
+[source,bash]
+----
+kubectl api-resources --api-group='serving.knative.dev'
+kubectl api-resources --api-group='messaging.knative.dev'
+kubectl api-resources --api-group='eventing.knative.dev'
+----
+
+kubectl get svc kourier -n kourier-system --output 'jsonpath={.spec.ports[?(@.port==80)].nodePort}'
+kubectl -n knative-cookbook get ksvc greeter
+
+curl -H "Host:greeter.knative-cookbook.example.com" 192.168.49.2:32498
+
+=== Strimzi Kafka Cluster
+
+[source,bash]
+----
+kubectl create namespace kafka
+curl -L https://github.com/strimzi/strimzi-kafka-operator/releases/download/0.29.0/strimzi-cluster-operator-0.29.0.yaml | sed 's/namespace: .*/namespace: kafka/' | kubectl apply -f - -n kafka
+
+watch kubectl get pods -n kafka
+
+
+----
