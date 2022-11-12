@@ -22,7 +22,7 @@ public class S3ManagementRoute extends RouteBuilder {
 
 
     from("timer://myTimer?fixedRate=true&period=30s&delay=5s")
-            .transform(constant("critic_udemy_bpm.txt"))
+            .transform(constant("myfile.txt"))
             //.to("controlbus:route?routeId=myRouteId&action=start");
             .to("direct:foo");
 
