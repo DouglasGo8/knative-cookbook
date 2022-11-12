@@ -2,19 +2,25 @@
 
 == Links
 
-. https://knative.dev/docs/[Knative]
-. https://github.com/redhat-developer-demos/knative-tutorial/tree/knative-cookbook[GitHub Repo]
-. https://github.com/redhat-developer-demos/knative-minishift[Knative on Minishift v1]
-. https://developers.redhat.com/blog/2019/04/09/from-zero-to-quarkus-and-knative-the-easy-way#prerequisites[Knative on Minishift v2]
-. https://192.168.42.25:8443/console[Local OKD]
-. https://github.com/openshift-cloud-functions/minishift-addons[Minishift addons]
-. https://medium.com/google-cloud/knative-serving-0-7-96e6d7be463e[Knative Serving 0.7]
+- https://knative.dev/docs/[Knative]
+- https://knative.dev/docs/install/quickstart-install/[Install Knative using quickstart]
+- https://gist.github.com/rahulkumar-aws/65e6fbe16cc71012cef997957a1530a3[Install/Remove Minikube]
+- https://medium.com/@seohee.sophie.kwon/how-to-run-a-minikube-on-apple-silicon-m1-8373c248d669[Install Minikube Mac M1]
+- https://knative.dev/docs/install/yaml-install/[Knative Installation]
+- https://github.com/redhat-developer-demos/knative-tutorial/tree/knative-cookbook[Knative Cookbook Git Repo]
+- https://github.com/redhat-developer-demos/knative-minishift[Knative on Minishift v1]
+- https://developers.redhat.com/blog/2019/04/09/from-zero-to-quarkus-and-knative-the-easy-way#prerequisites[Knative on Minishift v2]
+- https://192.168.42.25:8443/console[Local OKD]
+- https://github.com/openshift-cloud-functions/minishift-addons[Minishift Knative addons]
+- https://medium.com/google-cloud/knative-serving-0-7-96e6d7be463e[Knative Serving 0.7]
+
+
 . https://codelabs.developers.google.com/codelabs/knative-intro#8[Serving multiple versions simultaneously]
-. https://knative.dev/docs/install/client/install-kn/
+
 . https://knative.dev/docs/eventing/custom-event-source/containersource/#create-a-containersource-object
 . https://github.com/hguerrero/amq-examples/tree/master/kafka-demo/src/main/java/com/redhat/kafkademo
 . https://developers.redhat.com/blog/2018/10/29/how-to-run-kafka-on-openshift-the-enterprise-kubernetes-with-amq-streams#test_using_an_external_application
-. https://redhat-developer-demos.github.io/knative-tutorial/knative-tutorial/setup/minikube.html[Red Install Knative Minikube]
+
 . https://github.com/kubernetes/minikube/releases[Minikube Releases]
 . https://piotrminkowski.com/2021/03/12/knative-eventing-with-kafka-and-spring-cloud/[Knative On Spring Cloud]
 . https://knative.dev/docs/eventing/sources/kafka-source/[Knative Kafka Source]
@@ -27,6 +33,125 @@
 . On Knative you can deploy any modern application workload, such as monolithic applications, microservices, or even tiny functions
 . Like any other Kubernetes resource, a Knative Serving Service can be deployed using a resource YAML file.
 As you will see, the resource YAML is similar to a Kubernetes Deployment but with a few attributes removed.
+
+== Minikube Configuration
+
+[source,bash]
+----
+minikube config set cpus 4
+minikube config set memory 8192
+
+minikube start
+minikube start --driver=docker --alsologtostderr
+
+minikube addons enable registry
+
+# !!! IMPORTANT to Kourier Ingress !!!
+minikube tunnel
+k get pods -n kube-system
+
+----
+
+.Minikube LoadBalancer communication Enabled by Tunnel
+image::architecture/thumb/minikube-loadbalancer-communication-by-tunnel.png[]
+
+== Install Knative Serving v1.8.0
+
+[source,bash]
+----
+k apply \
+  --filename https://github.com/knative/serving/releases/download/knative-v1.8.0/serving-crds.yaml \
+  --filename https://github.com/knative/eventing/releases/download/knative-v1.8.0/eventing-crds.yaml
+k api-resources --api-group='serving.knative.dev'
+k api-resources --api-group='messaging.knative.dev'
+k api-resources --api-group='eventing.knative.dev'
+k api-resources --api-group='sources.knative.dev'
+
+k apply \
+  --filename \
+  https://github.com/knative/serving/releases/download/knative-v1.8.0/serving-core.yaml
+
+k rollout status deploy controller -n knative-serving
+k rollout status deploy activator -n knative-serving
+k rollout status deploy autoscaler -n knative-serving
+k rollout status deploy webhook -n knative-serving
+
+k get pods -n knative-serving
+
+k apply \
+  --filename \
+    https://github.com/knative/net-kourier/releases/download/knative-v1.8.0/kourier.yaml
+
+k rollout status deploy 3scale-kourier-control -n knative-serving
+k rollout status deploy 3scale-kourier-gateway -n kourier-system
+#
+k get pods --all-namespaces -l 'app in(3scale-kourier-gateway,3scale-kourier-control)'
+
+k patch configmap/config-network \
+  -n knative-serving \
+  --type merge \
+  -p '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev"}}'
+#
+k apply \
+  --filename https://projectcontour.io/quickstart/contour.yaml
+#
+k rollout status ds envoy -n projectcontour
+k rollout status deploy contour -n projectcontour
+k get pods -n projectcontour
+
+# Ingress to Kourier Ingress Gateway:
+
+cat <<EOF | kubectl apply -n kourier-system -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kourier-ingress
+  namespace: kourier-system
+spec:
+  rules:
+  - http:
+     paths:
+       - path: /
+         pathType: Prefix
+         backend:
+           service:
+             name: kourier
+             port:
+               number: 80
+EOF
+
+#
+ksvc_domain="\"data\":{\""$(minikube -p kn-serving-projects ip)".nip.io\": \"\"}"
+#
+k patch configmap/config-domain \
+    -n knative-serving \
+    --type merge \
+    -p "$ksvc_domain"
+----
+
+== Install Knative Eventing v1.8.0
+[source, bash]
+----
+k apply \
+  --filename \
+  https://github.com/knative/eventing/releases/download/knative-v1.8.0/eventing-core.yaml \
+  --filename \
+  https://github.com/knative/eventing/releases/download/knative-v1.8.0/in-memory-channel.yaml \
+  --filename \
+  https://github.com/knative/eventing/releases/download/knative-v1.8.0/mt-channel-broker.yaml
+
+k rollout status deploy eventing-controller -n knative-eventing
+k rollout status deploy eventing-webhook  -n knative-eventing
+k rollout status deploy imc-controller  -n knative-eventing
+k rollout status deploy imc-dispatcher -n knative-eventing
+k rollout status deploy mt-broker-controller -n knative-eventing
+k rollout status deploy mt-broker-filter -n knative-eventing
+k rollout status deploy mt-broker-filter -n knative-eventing
+
+#
+
+k get pods -n knative-eventing
+----
 
 == Enable Knative on Minishift
 
@@ -84,13 +209,26 @@ oc get configurations greeter
 
 == Invoking the current
 
+
 [source,bash]
 ----
+k get ksvc greeter
+
+# Istio Ingress
 #!/bin/bash
 KSVC_NAME=${1:-'greeter'}
-IP_ADDRESS="$(minikube ip):$(kubectl get svc istio-ingressgateway \
+IP_ADDRESS="$(minikube ip):$(k get svc istio-ingressgateway \
 --namespace istio-system \
 --output 'jsonpath={.spec.ports[?(@.port==80)].nodePort}')"
+
+# Kourier Ingress
+k get svc kourier -n kourier-system --output 'jsonpath={.spec.ports[?(@.port==80)].nodePort}'
+
+# Sample Output
+k get ksvc greeter
+curl -H "Host:greeter-v1.kn-serving-projects.192.168.49.2.nip.io" 192.168.49.2:32338
+
+
 curl -H "Host:$KSVC_NAME.chapter-2.example.com" $IP_ADDRESS
 oc ip
 watch -n 5 http greeter-00000-service-myproject.192.168.42.30.nip.io/
@@ -164,47 +302,18 @@ Brokers and Triggers
  Brokers and Triggers are similar to Channels and Subscriptions, except that they support filtering of events event filtering is a method that allows the Subscribers to show an interest in a certain set of messages that flows into the Broker
 
 
-=== Minikube Knative Configuration
-
-
-[source,bash]
-----
-minikube config set cpus 4
-minikube config set memory 8192
-
-minikube start
-
-minikube addons enable registry
-kubectl get pods -n kube-system
-
-
-# After Knative Installations
-kubectl api-resources --api-group=kafka.strimzi.io
-kubectl label nodes kind-control-plane my-label=sample
-kubectl get events --sort-by='.lastTimestamp' -n knative-serving
-kubectl config set-context --current --namespace=knative-cookbook
-
-
-minikube stop && minikube delete --all && minikube delete --purge
-----
-
-=== All Knative Eventing resources will be under the one of following API groups:
-
-- messaging.knative.dev
-- eventing.knative.dev
-- sources.knative.dev
 
 [source,bash]
 ----
 kubectl api-resources --api-group='serving.knative.dev'
 kubectl api-resources --api-group='messaging.knative.dev'
 kubectl api-resources --api-group='eventing.knative.dev'
-----
 
-kubectl get svc kourier -n kourier-system --output 'jsonpath={.spec.ports[?(@.port==80)].nodePort}'
-kubectl -n knative-cookbook get ksvc greeter
+
+kubectl get svc kourier -n kourier-system --output 'jsonpath={.spec.ports[?(@.port==80)].nodePort}' kubectl -n knative-cookbook get ksvc greeter
 
 curl -H "Host:greeter.knative-cookbook.example.com" 192.168.49.2:32498
+----
 
 === Strimzi Kafka Cluster
 

@@ -1,0 +1,11 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: kserving-dougdb
+spec:
+  template:
+    metadata:
+      name: kserving-dougdb-v1
+    spec:
+      containers:
+        - image: douglasdb/mytest:1.0.0
