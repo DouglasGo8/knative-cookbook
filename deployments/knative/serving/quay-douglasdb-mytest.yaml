@@ -8,4 +8,5 @@ spec:
       name: kserving-dougdb-v1
     spec:
       containers:
+        # docker hub
         - image: douglasdb/mytest:1.0.0
