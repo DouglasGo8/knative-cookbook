@@ -40,16 +40,13 @@ As you will see, the resource YAML is similar to a Kubernetes Deployment but wit
 ----
 minikube config set cpus 4
 minikube config set memory 8192
-
 minikube start
 minikube start --driver=docker --alsologtostderr
-
 minikube addons enable registry
 
 # !!! IMPORTANT to Kourier Ingress !!!
 minikube tunnel
 k get pods -n kube-system
-
 ----
 
 .Minikube LoadBalancer communication Enabled by Tunnel
@@ -294,6 +291,57 @@ oc adm policy add-scc-to-user anyuid -z default -n myproject
 oc adm policy add-scc-to-user privileged -z default -n myproject
 ----
 ////
+
+[source,yaml]
+----
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: greeter
+spec:
+  template:
+    metadata:
+      name: greeter-v1
+    spec:
+      containers:
+        - image: quay.io/rhdevelopers/knative-tutorial-greeter:quarkus
+          livenessProbe:
+            httpGet:
+              path: /healthz
+          readinessProbe:
+            httpGet:
+              path: /healthz
+
+----
+
+.Sample Scaling Zero/out
+[source,bash]
+----
+kn service list
+kn service describe greeter
+----
+
+.Knative Service list
+image::architecture/thumb/kn_service_list.png[]
+
+.Curl Command
+[source,bash]
+----
+curl -v -H "Host:greeter.k8s-hells.192.168.49.2.nip.io" localhost
+----
+
+.Curl Response
+image::architecture/thumb/curl_command_with_header.png[]
+
+.Dashboard Pods No invocation
+image::architecture/thumb/minikube_dashboard_0scale.png[]
+
+Dashboard Pods First invocation
+
+.Dashboard Pods First invocation
+image::architecture/thumb/minikube_dashboard_1scale.png[]
+
+Dashboard Pods First invocation
 
 == Deploy Knative commands
 
