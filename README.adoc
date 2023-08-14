@@ -4,6 +4,7 @@
 
 - https://knative.dev/docs/[Knative]
 - https://knative.dev/docs/install/quickstart-install/[Install Knative using quickstart]
+- https://redhat-developer-demos.github.io/knative-tutorial/knative-tutorial/setup/minikube.html[Install Knative Redhat Minikube]
 - https://gist.github.com/rahulkumar-aws/65e6fbe16cc71012cef997957a1530a3[Install/Remove Minikube]
 - https://medium.com/@seohee.sophie.kwon/how-to-run-a-minikube-on-apple-silicon-m1-8373c248d669[Install Minikube Mac M1]
 - https://knative.dev/docs/install/yaml-install/[Knative Installation]
@@ -13,7 +14,6 @@
 - https://192.168.42.25:8443/console[Local OKD]
 - https://github.com/openshift-cloud-functions/minishift-addons[Minishift Knative addons]
 - https://medium.com/google-cloud/knative-serving-0-7-96e6d7be463e[Knative Serving 0.7]
-
 
 . https://codelabs.developers.google.com/codelabs/knative-intro#8[Serving multiple versions simultaneously]
 
@@ -55,52 +55,120 @@ k get pods -n kube-system
 .Minikube LoadBalancer communication Enabled by Tunnel
 image::architecture/thumb/minikube-loadbalancer-communication-by-tunnel.png[]
 
-== Install Knative Serving v1.8.0
+== Install Knative Serving v1.11.0
 
+.Knative Serving/Eventing Installation API Resources
 [source,bash]
 ----
 k apply \
-  --filename https://github.com/knative/serving/releases/download/knative-v1.8.0/serving-crds.yaml \
-  --filename https://github.com/knative/eventing/releases/download/knative-v1.8.0/eventing-crds.yaml
+  --filename https://github.com/knative/serving/releases/download/knative-v1.11.0/serving-crds.yaml \
+  --filename https://github.com/knative/eventing/releases/download/knative-v1.11.0/eventing-crds.yaml
+----
+
+.Knative Serving/Eventing API Resources
+[source,bash]
+----
 k api-resources --api-group='serving.knative.dev'
 k api-resources --api-group='messaging.knative.dev'
 k api-resources --api-group='eventing.knative.dev'
 k api-resources --api-group='sources.knative.dev'
+----
 
+.Knative Serving/Eventing API Resources
+image::architecture/thumb/knative_serving_event-apis.png[]
+
+.Knative Serving Install/Rollout Status
+[source,bash]
+----
 k apply \
   --filename \
-  https://github.com/knative/serving/releases/download/knative-v1.8.0/serving-core.yaml
+  https://github.com/knative/serving/releases/download/knative-v1.11.0/serving-core.yaml
 
 k rollout status deploy controller -n knative-serving
 k rollout status deploy activator -n knative-serving
 k rollout status deploy autoscaler -n knative-serving
 k rollout status deploy webhook -n knative-serving
+----
 
+.Knative Serving Rollout Status
+image::architecture/thumb/knative_serving_rollout_status.png[]
+
+.Knative Serving Pods Resources
+[source,bash]
+----
 k get pods -n knative-serving
+----
 
+.Knative Serving Pods Resources
+image::architecture/thumb/knative_serving_pods_status.png[]
+
+.Knative Kourier Ingress Gateway Controller Installation
+[source,bash]
+----
 k apply \
   --filename \
-    https://github.com/knative/net-kourier/releases/download/knative-v1.8.0/kourier.yaml
+    https://github.com/knative/net-kourier/releases/download/knative-v1.11.0/kourier.yaml
+----
 
-k rollout status deploy 3scale-kourier-control -n knative-serving
+.Knative Kourier Ingress Gateway Controller Installation
+image::architecture/thumb/knative_ingress_kourier_installation.png[]
+
+.Knative Ingress Gateway Deployment Status
+[source,bash]
+----
+k rollout status deploy net-kourier-controller -n knative-serving
 k rollout status deploy 3scale-kourier-gateway -n kourier-system
+----
+
+.Knative Ingress Gateway Deployment Status
+image::architecture/thumb/knative_ingress_gateway_deployment_status.png[]
+
+.Knative Kourier Ingress Gateway Pods Status
+[source,bash]
+----
 #
-k get pods --all-namespaces -l 'app in(3scale-kourier-gateway,3scale-kourier-control)'
+k get pods --all-namespaces -l 'app in(3scale-kourier-gateway,net-kourier-controller)'
+----
+
+.Knative Kourier Ingress Gateway Pods Status
+image::architecture/thumb/knative_ingress_kourier_gateway_pods.png[]
+
+.Knative Serving Path CM to Kourier Ingress
+[source,bash]
+----
 
 k patch configmap/config-network \
   -n knative-serving \
   --type merge \
   -p '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev"}}'
-#
+----
+
+.Knative Serving Path CM to Kourier Ingress
+image::architecture/thumb/knative_serving_path_cm_kourier_asingress.png[]
+
+[source,bash]
+----
 k apply \
   --filename https://projectcontour.io/quickstart/contour.yaml
 #
+----
+
+.Knative Serving Ingress Controller Pods Deployment Status
+[source,bash]
+----
 k rollout status ds envoy -n projectcontour
 k rollout status deploy contour -n projectcontour
+
 k get pods -n projectcontour
+----
 
+.Knative Serving Ingress Controller Pods Deployment Status
+image::architecture/thumb/knative_serving_ingress_controller_deployment_status.png[]
+
+.Knative Serving Ingress to Kourier Gateway
+[source,bash]
+----
 # Ingress to Kourier Ingress Gateway:
-
 cat <<EOF | kubectl apply -n kourier-system -f -
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -119,26 +187,40 @@ spec:
              port:
                number: 80
 EOF
-
-#
-ksvc_domain="\"data\":{\""$(minikube -p kn-serving-projects ip)".nip.io\": \"\"}"
-#
-k patch configmap/config-domain \
-    -n knative-serving \
-    --type merge \
-    -p "$ksvc_domain"
 ----
 
-== Install Knative Eventing v1.8.0
-[source, bash]
+.Knative Serving Ingress to Kourier Gateway
+image::architecture/thumb/knative_serving_ingress_to_kourier_gateway.png[]
+
+
+.Minikube Default Profile
+image::architecture/thumb/minikube_default_profile.png[]
+
+.Knative Use Kourier Ingress Default Profile
+[source,bash]
+----
+ksvc_domain="\"data\":{\""$(minikube -p minikube ip)".nip.io\": \"\"}"
+kubectl patch configmap/config-domain \
+    -n knative-serving \
+    --type merge \
+    -p "{$ksvc_domain}"
+----
+
+.Knative Use Kourier Ingress Default Profile
+image::architecture/thumb/knative_serving_minikuber-profile_use-kourier_ingress.png[]
+
+== Install Knative Eventing v1.11.0
+
+.KEventing Installation Rollout Status
+[source,bash]
 ----
 k apply \
   --filename \
-  https://github.com/knative/eventing/releases/download/knative-v1.8.0/eventing-core.yaml \
+  https://github.com/knative/eventing/releases/download/knative-v1.11.0/eventing-core.yaml \
   --filename \
-  https://github.com/knative/eventing/releases/download/knative-v1.8.0/in-memory-channel.yaml \
+  https://github.com/knative/eventing/releases/download/knative-v1.11.0/in-memory-channel.yaml \
   --filename \
-  https://github.com/knative/eventing/releases/download/knative-v1.8.0/mt-channel-broker.yaml
+  https://github.com/knative/eventing/releases/download/knative-v1.11.0/mt-channel-broker.yaml
 
 k rollout status deploy eventing-controller -n knative-eventing
 k rollout status deploy eventing-webhook  -n knative-eventing
@@ -148,11 +230,28 @@ k rollout status deploy mt-broker-controller -n knative-eventing
 k rollout status deploy mt-broker-filter -n knative-eventing
 k rollout status deploy mt-broker-filter -n knative-eventing
 
-#
+----
 
+.KEventing Installation Rollout Status
+image::architecture/thumb/keventing_install_rollout_status.png[]
+
+.KEventing Pods Status
+[source,bash]
+----
 k get pods -n knative-eventing
 ----
 
+.KEventing Pods Status
+image::architecture/thumb/KEventing_Status_Pods.png[]
+
+.Final NS with Knative Installation
+image::architecture/thumb/k8s_final_namespaces_after_knative_installation.png[]
+
+
+.Knative Client CLI version
+image::architecture/thumb/kn_client_version.png[]
+
+////
 == Enable Knative on Minishift
 
 [source,bash]
@@ -194,6 +293,7 @@ oc project myproject
 oc adm policy add-scc-to-user anyuid -z default -n myproject
 oc adm policy add-scc-to-user privileged -z default -n myproject
 ----
+////
 
 == Deploy Knative commands
 
@@ -208,7 +308,6 @@ oc get configurations greeter
 ----
 
 == Invoking the current
-
 
 [source,bash]
 ----
@@ -300,8 +399,6 @@ Channels and Subscriptions
 Brokers and Triggers
 
  Brokers and Triggers are similar to Channels and Subscriptions, except that they support filtering of events event filtering is a method that allows the Subscribers to show an interest in a certain set of messages that flows into the Broker
-
-
 
 [source,bash]
 ----
